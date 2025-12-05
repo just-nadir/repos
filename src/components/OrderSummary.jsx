@@ -90,7 +90,8 @@ const OrderSummary = ({ table, onDeselect }) => {
   const finalTotal = preTotal - discountAmount;
 
   // --- TO'LOV QILISH ---
-  const handlePaymentSuccess = async (method) => {
+  // O'ZGARISH: Bu funksiya endi 2-argument sifatida 'dueDate' ni qabul qiladi
+  const handlePaymentSuccess = async (method, dueDate) => {
     if (!table || !window.require) return;
     try {
       const { ipcRenderer } = window.require('electron');
@@ -103,7 +104,8 @@ const OrderSummary = ({ table, onDeselect }) => {
           discount: discountAmount,
           paymentMethod: method,
           customerId: selectedCustomer ? selectedCustomer.id : null,
-          items: orderItems
+          items: orderItems,
+          dueDate: dueDate // <--- YANGI: Sana backendga yuborilmoqda
       };
 
       // Backenddagi 'checkout' funksiyasini chaqiramiz
