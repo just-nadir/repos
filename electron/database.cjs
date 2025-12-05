@@ -6,10 +6,8 @@ const dbPath = path.join(app.getAppPath(), 'pos.db');
 const db = new Database(dbPath, { verbose: console.log });
 
 // --- MUHIM: WAL REJIMINI YOQISH ---
-// Bu baza qotib qolishini oldini oladi
 db.pragma('journal_mode = WAL');
 
-// ... (qolgan kodlar o'zgarishsiz) ...
 const listeners = [];
 
 function onChange(callback) {
@@ -21,7 +19,6 @@ function notify(event, data) {
 }
 
 function initDB() {
-  // ... (table yaratish kodlari o'zgarishsiz) ...
   db.exec(`CREATE TABLE IF NOT EXISTS halls (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`);
   db.exec(`CREATE TABLE IF NOT EXISTS tables (id INTEGER PRIMARY KEY AUTOINCREMENT, hall_id INTEGER, name TEXT NOT NULL, status TEXT DEFAULT 'free', guests INTEGER DEFAULT 0, start_time TEXT, total_amount REAL DEFAULT 0, FOREIGN KEY(hall_id) REFERENCES halls(id) ON DELETE CASCADE)`);
   db.exec(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, type TEXT DEFAULT 'standard', value INTEGER DEFAULT 0, balance REAL DEFAULT 0, birthday TEXT, debt REAL DEFAULT 0)`);
@@ -58,7 +55,48 @@ function initDB() {
       role TEXT DEFAULT 'waiter'
     )
   `);
-  
+
+  // --- YANGI: SMS TIZIMI JADVALLARI ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sms_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      type TEXT UNIQUE NOT NULL -- 'birthday', 'debt_reminder', 'new_menu'
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sms_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phone TEXT,
+      message TEXT,
+      status TEXT, -- 'sent', 'failed'
+      date TEXT
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS customer_debts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER,
+      amount REAL,
+      due_date TEXT,
+      last_sms_date TEXT,
+      is_paid INTEGER DEFAULT 0,
+      FOREIGN KEY(customer_id) REFERENCES customers(id)
+    )
+  `);
+
+  // --- Default SMS Templates ---
+  const tplCount = db.prepare('SELECT count(*) as count FROM sms_templates').get().count;
+  if (tplCount === 0) {
+    const insertTpl = db.prepare('INSERT INTO sms_templates (title, content, type) VALUES (?, ?, ?)');
+    insertTpl.run('Tug\'ilgan kun', 'Hurmatli {name}! Restoranimiz sizni tug\'ilgan kuningiz bilan tabriklaydi! Sizni kutib qolamiz.', 'birthday');
+    insertTpl.run('Qarz Eslatmasi', 'Hurmatli {name}. Sizning {amount} so\'m qarzingiz bor. Iltimos to\'lovni amalga oshiring.', 'debt_reminder');
+    insertTpl.run('Yangi Menyu', 'Hurmatli mijoz! Bizda yangilik: {dish}. Tatib ko\'rishga taklif qilamiz!', 'new_menu');
+  }
+
   // Default Data
   const stmtUsers = db.prepare('SELECT count(*) as count FROM users');
   if (stmtUsers.get().count === 0) {

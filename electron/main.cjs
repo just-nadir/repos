@@ -2,8 +2,10 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const log = require('electron-log');
 // DATABASE DAN 'onChange' NI IMPORT QILISH KERAK
-const { initDB, onChange } = require('./database.cjs'); 
-const startServer = require('./server.cjs');  
+const { initDB, onChange, db } = require('./database.cjs'); 
+const startServer = require('./server.cjs');
+const cron = require('node-cron'); // --- YANGI
+const smsService = require('./services/smsService.cjs'); // --- YANGI
 
 // --- LOGGER SOZLAMALARI ---
 log.transports.file.level = 'info';
@@ -18,6 +20,7 @@ const orderController = require('./controllers/orderController.cjs');
 const userController = require('./controllers/userController.cjs');
 const settingsController = require('./controllers/settingsController.cjs');
 const staffController = require('./controllers/staffController.cjs');
+const smsController = require('./controllers/smsController.cjs'); // --- YANGI
 
 process.on('uncaughtException', (error) => {
   log.error('KRITIK XATOLIK (Main):', error);
@@ -28,11 +31,69 @@ process.on('unhandledRejection', (reason) => {
 
 app.disableHardwareAcceleration();
 
+// --- AVTOMATIK SMS TASKS (CRON) ---
+function initCronJobs() {
+    // Har kuni ertalab 09:00 da ishlaydi
+    cron.schedule('0 9 * * *', async () => {
+        log.info("CRON: Avtomatik SMS tekshiruvi boshlandi...");
+        
+        try {
+            // 1. TUG'ILGAN KUN
+            const today = new Date().toISOString().slice(5, 10); // "MM-DD" format
+            const birthdayCustomers = db.prepare("SELECT * FROM customers WHERE strftime('%m-%d', birthday) = ?").all(today);
+            const bdayTemplate = db.prepare("SELECT * FROM sms_templates WHERE type = 'birthday'").get();
+
+            if (bdayTemplate && birthdayCustomers.length > 0) {
+                for (const customer of birthdayCustomers) {
+                    if (customer.phone) {
+                        const msg = bdayTemplate.content.replace('{name}', customer.name);
+                        await smsService.sendSMS(customer.phone, msg);
+                        log.info(`Happy Birthday SMS sent to ${customer.name}`);
+                    }
+                }
+            }
+
+            // 2. QARZ ESLATMASI
+            // To'lash muddati kelgan yoki o'tgan, VA (hech qachon sms bormagan YOKI oxirgi smsdan 3 kun o'tgan)
+            const debtRecords = db.prepare(`
+                SELECT cd.*, c.name, c.phone 
+                FROM customer_debts cd
+                JOIN customers c ON cd.customer_id = c.id
+                WHERE cd.is_paid = 0 
+                AND cd.due_date <= date('now')
+                AND (cd.last_sms_date IS NULL OR julianday('now') - julianday(cd.last_sms_date) >= 3)
+            `).all();
+
+            const debtTemplate = db.prepare("SELECT * FROM sms_templates WHERE type = 'debt_reminder'").get();
+
+            if (debtTemplate && debtRecords.length > 0) {
+                for (const record of debtRecords) {
+                    if (record.phone) {
+                        const msg = debtTemplate.content
+                            .replace('{name}', record.name)
+                            .replace('{amount}', record.amount.toLocaleString());
+                        
+                        await smsService.sendSMS(record.phone, msg);
+                        
+                        // Oxirgi SMS vaqtini yangilash
+                        db.prepare('UPDATE customer_debts SET last_sms_date = ? WHERE id = ?').run(new Date().toISOString(), record.id);
+                        log.info(`Debt Reminder sent to ${record.name}`);
+                    }
+                }
+            }
+
+        } catch (error) {
+            log.error("CRON Error:", error);
+        }
+    });
+}
+
 function createWindow() {
   try {
     initDB();
     startServer();
-    log.info("Dastur ishga tushdi. Baza va Server yondi.");
+    initCronJobs(); // Cronni yoqish
+    log.info("Dastur ishga tushdi. Baza, Server va Cron yondi.");
   } catch (err) {
     log.error("Boshlang'ich yuklashda xato:", err);
   }
@@ -43,12 +104,10 @@ function createWindow() {
     backgroundColor: '#f3f4f6',
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false, // Preload ishlatilmasa false bo'lishi kerak, lekin sizda preload bor.
-      // Agar preload.cjs ishlatilayotgan bo'lsa, uni shu yerga ulash kerak:
+      contextIsolation: false, 
       preload: path.join(__dirname, 'preload.cjs') 
     },
   });
-
   // --- YANGI QO'SHILGAN QISM: REAL-TIME UPDATE ---
   // Bazada o'zgarish bo'lganda (notify), darhol oynaga xabar yuboramiz
   onChange((type, id) => {
@@ -117,11 +176,16 @@ ipcMain.handle('get-sales', (e, range) => {
   return orderController.getSales();
 });
 
+// --- YANGI: SMS IPC ---
+ipcMain.handle('get-sms-templates', () => smsController.getTemplates());
+ipcMain.handle('save-sms-template', (e, data) => smsController.saveTemplate(data));
+ipcMain.handle('send-manual-sms', (e, msg) => smsController.sendManualBroadcast(msg));
+ipcMain.handle('get-sms-logs', () => smsController.getLogs());
+
 app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-
 app.on('window-all-closed', () => { 
     log.info("Dastur yopildi.");
     if (process.platform !== 'darwin') app.quit(); 

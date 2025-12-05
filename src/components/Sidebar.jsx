@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, UtensilsCrossed, Settings, LogOut, Square, Users, FileText, PieChart } from 'lucide-react';
+import { LayoutGrid, UtensilsCrossed, Settings, LogOut, Square, Users, FileText, PieChart, MessageSquare } from 'lucide-react'; // MessageSquare import qilindi
 
 const Sidebar = ({ activePage, onNavigate, onLogout, user }) => {
   const menuItems = [
@@ -8,6 +8,8 @@ const Sidebar = ({ activePage, onNavigate, onLogout, user }) => {
     { id: 'tables', icon: <Square size={24} />, label: "Zallar" },
     { id: 'customers', icon: <Users size={24} />, label: "Mijozlar" },
     { id: 'debtors', icon: <FileText size={24} />, label: "Qarzdorlar" },
+    // YANGI BO'LIM
+    { id: 'sms', icon: <MessageSquare size={24} />, label: "SMS" },
     { id: 'reports', icon: <PieChart size={24} />, label: "Xisobotlar" },
     { id: 'settings', icon: <Settings size={24} />, label: "Sozlamalar" },
   ];

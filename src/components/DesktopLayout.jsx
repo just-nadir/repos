@@ -10,6 +10,7 @@ import DebtorsManagement from './DebtorsManagement';
 import Reports from './Reports';
 import Settings from './Settings';
 import PinLogin from './PinLogin';
+import SmsPage from './SmsPage'; // --- YANGI
 
 const DesktopLayout = () => {
   const [user, setUser] = useState(null); 
@@ -46,13 +47,17 @@ const DesktopLayout = () => {
         return (
           <>
             <TablesGrid onSelectTable={setSelectedTable} />
-            <OrderSummary table={selectedTable} onDeselect={() => setSelectedTable(null)} />
+            <OrderSummary 
+                table={selectedTable} 
+                onDeselect={() => setSelectedTable(null)} 
+            />
           </>
         );
       case 'menu': return <MenuManagement />;
       case 'tables': return <TablesManagement />;
       case 'customers': return <CustomersManagement />;
       case 'debtors': return <DebtorsManagement />;
+      case 'sms': return <SmsPage />; // --- YANGI
       case 'reports': return <Reports />;
       case 'settings': return <Settings />;
       default: return <div>Sahifa topilmadi</div>;

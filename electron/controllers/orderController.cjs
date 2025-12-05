@@ -1,6 +1,7 @@
 const { db, notify } = require('../database.cjs');
 const printerService = require('../services/printerService.cjs');
-const log = require('electron-log'); // Log
+const log = require('electron-log');
+// Log
 
 module.exports = {
   getTableItems: (id) => db.prepare('SELECT * FROM order_items WHERE table_id = ?').all(id),
@@ -10,7 +11,8 @@ module.exports = {
        const { tableId, productId, productName, price, quantity, destination } = item;
        db.prepare(`INSERT INTO order_items (table_id, product_name, price, quantity, destination) VALUES (?, ?, ?, ?, ?)`).run(tableId, productName, price, quantity, destination);
        const currentTable = db.prepare('SELECT total_amount FROM tables WHERE id = ?').get(tableId);
-       const newTotal = (currentTable ? currentTable.total_amount : 0) + (price * quantity);
+       const newTotal = (currentTable ? currentTable.total_amount 
+: 0) + (price * quantity);
        db.prepare(`UPDATE tables SET status = 'occupied', total_amount = ?, start_time = COALESCE(start_time, ?) WHERE id = ?`)
          .run(newTotal, new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), tableId);
     });
@@ -29,14 +31,14 @@ module.exports = {
            insertStmt.run(tableId, item.name, item.price, item.qty, item.destination);
            additionalTotal += (item.price * item.qty);
        }
-       
+   
+    
        const currentTable = db.prepare('SELECT total_amount FROM tables WHERE id = ?').get(tableId);
        const newTotal = (currentTable ? currentTable.total_amount : 0) + additionalTotal;
        
        db.prepare(`UPDATE tables SET status = 'occupied', total_amount = ?, start_time = COALESCE(start_time, ?) WHERE id = ?`)
          .run(newTotal, new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), tableId);
     });
-
     const res = addBulkTransaction(items);
     notify('tables', null);
     notify('table-items', tableId);
@@ -44,7 +46,7 @@ module.exports = {
   },
 
   checkout: async (data) => {
-    const { tableId, total, subtotal, discount, paymentMethod, customerId, items } = data;
+    const { tableId, total, subtotal, discount, paymentMethod, customerId, items, dueDate } = data; // dueDate qo'shildi
     const date = new Date().toISOString();
     
     // Tranzaksiya
@@ -53,18 +55,23 @@ module.exports = {
       
       if (paymentMethod === 'debt' && customerId) {
         db.prepare('UPDATE customers SET debt = debt + ? WHERE id = ?').run(total, customerId);
+        
+        // --- YANGI: Qarz tarixiga va alohida kuzatuv jadvaliga yozish ---
         db.prepare('INSERT INTO debt_history (customer_id, amount, type, date, comment) VALUES (?, ?, ?, ?, ?)').run(customerId, total, 'debt', date, 'Savdo (Nasiya)');
+        
+        // Agar to'lash sanasi (dueDate) bo'lsa, customer_debts ga yozamiz
+        if (dueDate) {
+            db.prepare('INSERT INTO customer_debts (customer_id, amount, due_date, is_paid) VALUES (?, ?, ?, 0)').run(customerId, total, dueDate);
+        }
       }
       
       db.prepare('DELETE FROM order_items WHERE table_id = ?').run(tableId);
       db.prepare("UPDATE tables SET status = 'free', guests = 0, start_time = NULL, total_amount = 0 WHERE id = ?").run(tableId);
     });
-
     const res = performCheckout();
     
     // LOG YOZISH
     log.info(`SAVDO: Stol ID: ${tableId}, Jami: ${total}, To'lov: ${paymentMethod}, Mijoz ID: ${customerId || 'Yo\'q'}`);
-
     notify('tables', null);
     notify('sales', null);
     if(customerId) notify('customers', null);
@@ -80,7 +87,8 @@ module.exports = {
         discount,
         service,
         paymentMethod
-    }).catch(err => log.error("Printer xatosi:", err)); // Xatoni logga yozamiz
+    }).catch(err => log.error("Printer xatosi:", err));
+    // Xatoni logga yozamiz
 
     return res;
   },

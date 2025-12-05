@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { X, Banknote, CreditCard, Smartphone, Check, FileText, AlertCircle } from 'lucide-react';
+import { X, Banknote, CreditCard, Smartphone, Check, FileText, AlertCircle, Calendar } from 'lucide-react';
 
 const PaymentModal = ({ isOpen, onClose, totalAmount, onPay, selectedCustomer }) => {
   if (!isOpen) return null;
 
   const [activeMethod, setActiveMethod] = useState('cash');
   const [error, setError] = useState('');
+  const [dueDate, setDueDate] = useState(''); // YANGI: Qarz qaytarish sanasi
 
   // To'lov turlari
   const paymentMethods = [
@@ -18,13 +19,20 @@ const PaymentModal = ({ isOpen, onClose, totalAmount, onPay, selectedCustomer })
 
   const handlePayment = () => {
     // Agar Nasiya tanlangan bo'lsa va mijoz tanlanmagan bo'lsa -> Xatolik
-    if (activeMethod === 'debt' && !selectedCustomer) {
-      setError("Nasiya yozish uchun avval mijozni tanlashingiz shart!");
-      return;
+    if (activeMethod === 'debt') {
+        if (!selectedCustomer) {
+            setError("Nasiya yozish uchun avval mijozni tanlashingiz shart!");
+            return;
+        }
+        if (!dueDate) {
+            setError("Iltimos, qarzni qaytarish sanasini kiriting!");
+            return;
+        }
     }
 
     if (onPay) {
-        onPay(activeMethod);
+        // dueDate ni ham jo'natamiz
+        onPay(activeMethod, dueDate); // --- O'ZGARTIRISH: 2-parametr
     } else {
         onClose();
     }
@@ -67,6 +75,22 @@ const PaymentModal = ({ isOpen, onClose, totalAmount, onPay, selectedCustomer })
             ))}
           </div>
 
+          {/* YANGI: Nasiya sanasi inputi */}
+          {activeMethod === 'debt' && (
+              <div className="mb-4 bg-orange-50 p-4 rounded-xl border border-orange-200 animate-in slide-in-from-top">
+                  <label className="block text-sm font-bold text-orange-800 mb-2 flex items-center gap-2">
+                      <Calendar size={16}/> Qarzni qaytarish sanasi
+                  </label>
+                  <input 
+                    type="date" 
+                    value={dueDate}
+                    min={new Date().toISOString().split('T')[0]} // O'tib ketgan sanani tanlab bo'lmasin
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full p-3 rounded-lg border border-orange-300 outline-none focus:ring-2 focus:ring-orange-500 text-gray-800 font-bold"
+                  />
+              </div>
+          )}
+
           {/* Xato xabari */}
           {error && (
               <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl flex items-center gap-2 text-sm font-bold animate-pulse">
@@ -75,7 +99,7 @@ const PaymentModal = ({ isOpen, onClose, totalAmount, onPay, selectedCustomer })
           )}
 
           {/* Agar Nasiya tanlangan bo'lsa, ogohlantirish */}
-          {activeMethod === 'debt' && !error && (
+          {activeMethod === 'debt' && !error && !dueDate && (
              <div className={`text-center text-sm mb-4 p-2 rounded-lg ${selectedCustomer ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-600 font-bold'}`}>
                {selectedCustomer 
                  ? `Qarz "${selectedCustomer.name}" nomiga yoziladi.` 
