@@ -65,7 +65,7 @@ const DebtorsManagement = () => {
       setPayAmount('');
       loadDebtors();
       loadHistory(activeDebtor.id);
-      setIsSuccess(true); // Alert o'rniga state
+      setIsSuccess(true);
     } catch (err) { console.error(err); }
   };
 
@@ -99,6 +99,14 @@ const DebtorsManagement = () => {
                 <span className={`font-bold ${activeDebtor?.id === debtor.id ? 'text-red-700' : 'text-gray-700'}`}>
                   {debtor.name}
                 </span>
+                
+                {/* --- YANGI: MUDDATNI KO'RSATISH (Qayerda chiqishi) --- */}
+                {debtor.next_due_date && (
+                    <span className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded border border-orange-200 flex items-center gap-1 ml-2" title="To'lash muddati">
+                       <Calendar size={10} /> {new Date(debtor.next_due_date).toLocaleDateString()}
+                    </span>
+                )}
+                {/* ---------------------------------------------------- */}
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-gray-400">{debtor.phone}</span>
@@ -128,6 +136,14 @@ const DebtorsManagement = () => {
                 <h1 className="text-3xl font-bold text-gray-800 mb-1">{activeDebtor.name}</h1>
                 <div className="flex items-center gap-4 text-gray-500 text-sm">
                   <span className="flex items-center gap-1"><User size={14} /> {activeDebtor.phone}</span>
+                  
+                  {/* --- YANGI: TAFSILOTLARDA MUDDATNI KO'RSATISH --- */}
+                  {activeDebtor.next_due_date && (
+                      <span className="flex items-center gap-1 text-orange-600 font-bold bg-orange-50 px-2 py-1 rounded border border-orange-200">
+                          <Calendar size={14} /> Muddat: {new Date(activeDebtor.next_due_date).toLocaleDateString()}
+                      </span>
+                  )}
+                  {/* ------------------------------------------------ */}
                 </div>
               </div>
               
